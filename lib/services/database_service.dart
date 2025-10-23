@@ -20,8 +20,9 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: _createDB,
+      onUpgrade: _upgradeDB,
     );
   }
 
@@ -33,9 +34,16 @@ class DatabaseService {
         description TEXT,
         completed INTEGER NOT NULL,
         priority TEXT NOT NULL,
-        createdAt TEXT NOT NULL
+        createdAt TEXT NOT NULL,
+        dueDate TEXT
       )
     ''');
+  }
+
+  Future<void> _upgradeDB(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE tasks ADD COLUMN dueDate TEXT');
+    }
   }
 
   Future<Task> create(Task task) async {
@@ -46,11 +54,7 @@ class DatabaseService {
 
   Future<Task?> read(String id) async {
     final db = await database;
-    final maps = await db.query(
-      'tasks',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    final maps = await db.query('tasks', where: 'id = ?', whereArgs: [id]);
 
     if (maps.isNotEmpty) {
       return Task.fromMap(maps.first);
@@ -77,10 +81,6 @@ class DatabaseService {
 
   Future<int> delete(String id) async {
     final db = await database;
-    return await db.delete(
-      'tasks',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    return await db.delete('tasks', where: 'id = ?', whereArgs: [id]);
   }
 }

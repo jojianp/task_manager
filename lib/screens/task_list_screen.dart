@@ -14,7 +14,8 @@ class TaskListScreen extends StatefulWidget {
 class _TaskListScreenState extends State<TaskListScreen> {
   List<Task> _tasks = [];
   String _filter = 'all'; // all, completed, pending
-  String _sortBy = 'date'; // date, priority, title
+  String _sortBy =
+      'dueDate'; // dueDate, date, priority, title - MUDADO: dueDate como padrão
   String _searchQuery = '';
   bool _isLoading = false;
 
@@ -68,8 +69,18 @@ class _TaskListScreenState extends State<TaskListScreen> {
         tasks.sort((a, b) => a.title.compareTo(b.title));
         break;
       case 'date':
-      default:
         tasks.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
+      case 'dueDate':
+      default:
+        tasks.sort((a, b) {
+          if (a.dueDate == null && b.dueDate == null) {
+            return b.createdAt.compareTo(a.createdAt);
+          }
+          if (a.dueDate == null) return 1;
+          if (b.dueDate == null) return -1;
+          return a.dueDate!.compareTo(b.dueDate!);
+        });
     }
 
     return tasks;
@@ -120,9 +131,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Future<void> _openTaskForm([Task? task]) async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => TaskFormScreen(task: task),
-      ),
+      MaterialPageRoute(builder: (context) => TaskFormScreen(task: task)),
     );
 
     if (result == true) {
@@ -130,10 +139,46 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
+  void _checkOverdueTasks() {
+    final overdueTasks = _tasks.where((task) {
+      if (task.dueDate == null || task.completed) return false;
+      return task.dueDate!.isBefore(DateTime.now());
+    }).toList();
+
+    if (overdueTasks.isNotEmpty && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Row(
+              children: [
+                Icon(Icons.warning, color: Colors.red),
+                SizedBox(width: 8),
+                Text('Tarefas Vencidas'),
+              ],
+            ),
+            content: Text(
+              'Você tem ${overdueTasks.length} tarefa(s) vencida(s).\n\n'
+              'Tarefas vencidas: ${overdueTasks.map((t) => t.title).join(', ')}',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final filteredTasks = _filteredTasks;
     final stats = _calculateStats();
+
+    _checkOverdueTasks();
 
     return Scaffold(
       appBar: AppBar(
@@ -148,17 +193,18 @@ class _TaskListScreenState extends State<TaskListScreen> {
             onSelected: (value) => setState(() => _sortBy = value),
             itemBuilder: (context) => const [
               PopupMenuItem(
-                value: 'date',
-                child: Text('Ordenar por Data'),
+                value: 'dueDate',
+                child: Text('Ordenar por Vencimento'),
               ),
               PopupMenuItem(
                 value: 'priority',
                 child: Text('Ordenar por Prioridade'),
               ),
               PopupMenuItem(
-                value: 'title',
-                child: Text('Ordenar por Título'),
+                value: 'date',
+                child: Text('Ordenar por Data de Criação'),
               ),
+              PopupMenuItem(value: 'title', child: Text('Ordenar por Título')),
             ],
           ),
 
@@ -242,20 +288,32 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 ),
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: const [
-                  BoxShadow(
-                    blurRadius: 8,
-                    offset: Offset(0, 4),
-                  ),
+                  BoxShadow(blurRadius: 8, offset: Offset(0, 4)),
                 ],
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildStatItem(Icons.list, 'Total', stats['total'].toString()),
-                  _buildStatItem(Icons.pending_actions, 'Pendentes',
-                      stats['pending'].toString()),
-                  _buildStatItem(Icons.check_circle, 'Concluídas',
-                      stats['completed'].toString()),
+                  _buildStatItem(
+                    Icons.list,
+                    'Total',
+                    stats['total'].toString(),
+                  ),
+                  _buildStatItem(
+                    Icons.pending_actions,
+                    'Pendentes',
+                    stats['pending'].toString(),
+                  ),
+                  _buildStatItem(
+                    Icons.check_circle,
+                    'Concluídas',
+                    stats['completed'].toString(),
+                  ),
+                  _buildStatItem(
+                    Icons.warning,
+                    'Vencidas',
+                    stats['overdue'].toString(),
+                  ),
                 ],
               ),
             ),
@@ -265,23 +323,23 @@ class _TaskListScreenState extends State<TaskListScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : filteredTasks.isEmpty
-                    ? _buildEmptyState()
-                    : RefreshIndicator(
-                        onRefresh: _loadTasks,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.only(bottom: 80),
-                          itemCount: filteredTasks.length,
-                          itemBuilder: (context, index) {
-                            final task = filteredTasks[index];
-                            return TaskCard(
-                              task: task,
-                              onTap: () => _openTaskForm(task),
-                              onToggle: () => _toggleTask(task),
-                              onDelete: () => _deleteTask(task),
-                            );
-                          },
-                        ),
-                      ),
+                ? _buildEmptyState()
+                : RefreshIndicator(
+                    onRefresh: _loadTasks,
+                    child: ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 80),
+                      itemCount: filteredTasks.length,
+                      itemBuilder: (context, index) {
+                        final task = filteredTasks[index];
+                        return TaskCard(
+                          task: task,
+                          onTap: () => _openTaskForm(task),
+                          onToggle: () => _toggleTask(task),
+                          onDelete: () => _deleteTask(task),
+                        );
+                      },
+                    ),
+                  ),
           ),
         ],
       ),
@@ -312,10 +370,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         ),
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 12,
-          ),
+          style: const TextStyle(color: Colors.white70, fontSize: 12),
         ),
       ],
     );
@@ -347,10 +402,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
           const SizedBox(height: 16),
           Text(
             message,
-            style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey.shade600,
-            ),
+            style: TextStyle(fontSize: 18, color: Colors.grey.shade600),
           ),
           const SizedBox(height: 8),
           TextButton.icon(
@@ -364,10 +416,16 @@ class _TaskListScreenState extends State<TaskListScreen> {
   }
 
   Map<String, int> _calculateStats() {
+    final overdueCount = _tasks.where((task) {
+      if (task.dueDate == null || task.completed) return false;
+      return task.dueDate!.isBefore(DateTime.now());
+    }).length;
+
     return {
       'total': _tasks.length,
       'completed': _tasks.where((t) => t.completed).length,
       'pending': _tasks.where((t) => !t.completed).length,
+      'overdue': overdueCount,
     };
   }
 }
