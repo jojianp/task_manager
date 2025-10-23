@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'screens/task_list_screen.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
+  // Inicializa o FFI para Windows/Linux/Mac
+  sqfliteFfiInit();
+  databaseFactory = databaseFactoryFfi;
+
   runApp(const MyApp());
 }
 
