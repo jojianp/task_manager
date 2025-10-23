@@ -21,7 +21,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 3, 
+      version: 4,
       onCreate: _createDB,
       onUpgrade: _upgradeDB,
     );
@@ -62,25 +62,52 @@ class DatabaseService {
       await db.execute('ALTER TABLE tasks ADD COLUMN dueDate TEXT');
     }
     if (oldVersion < 3) {
-      // Criar tabela de categorias
-      await db.execute('''
-        CREATE TABLE categories (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          color TEXT NOT NULL,
-          createdAt TEXT NOT NULL
-        )
-      ''');
+      // Verificar se a tabela categories já existe antes de criar
+      final categoriesTable = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='categories'",
+      );
+
+      if (categoriesTable.isEmpty) {
+        await db.execute('''
+          CREATE TABLE categories (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            color TEXT NOT NULL,
+            createdAt TEXT NOT NULL
+          )
+        ''');
+      }
 
       // Adicionar coluna categoryId na tabela tasks
       await db.execute('ALTER TABLE tasks ADD COLUMN categoryId TEXT');
 
-      // Inserir categorias padrão
+      // Inserir categorias padrão apenas se a tabela estiver vazia
       await _insertDefaultCategories(db);
+    }
+    if (oldVersion < 4) {
+      // CORREÇÃO: Limpar categorias duplicadas e reinserir
+      await _cleanAndReinsertCategories(db);
     }
   }
 
+  Future<void> _cleanAndReinsertCategories(Database db) async {
+    // Limpar todas as categorias existentes
+    await db.delete('categories');
+
+    // Atualizar todas as tarefas para remover referências a categorias
+    await db.update('tasks', {'categoryId': null});
+
+    // Reinserir categorias padrão
+    await _insertDefaultCategories(db);
+  }
+
   Future<void> _insertDefaultCategories(Database db) async {
+    // Primeiro verificar se já existem categorias
+    final existingCategories = await db.query('categories');
+    if (existingCategories.isNotEmpty) {
+      return; // Já existem categorias, não inserir duplicatas
+    }
+
     final defaultCategories = [
       Category(
         name: 'Trabalho',
@@ -175,7 +202,17 @@ class DatabaseService {
     final db = await database;
     const orderBy = 'name ASC';
     final result = await db.query('categories', orderBy: orderBy);
-    return result.map((map) => Category.fromMap(map)).toList();
+
+    // Garantir que não retorne categorias duplicadas
+    final Map<String, Category> uniqueCategories = {};
+    for (final map in result) {
+      final category = Category.fromMap(map);
+      if (!uniqueCategories.containsKey(category.id)) {
+        uniqueCategories[category.id] = category;
+      }
+    }
+
+    return uniqueCategories.values.toList();
   }
 
   Future<int> updateCategory(Category category) async {
