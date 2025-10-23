@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/task.dart';
+import '../models/category.dart';
 import '../services/database_service.dart';
 
 class TaskFormScreen extends StatefulWidget {
@@ -20,10 +21,13 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
   bool _completed = false;
   bool _isLoading = false;
   DateTime? _dueDate;
+  String? _selectedCategoryId; 
+  List<Category> _categories = []; 
 
   @override
   void initState() {
     super.initState();
+    _loadCategories();
 
     // Se estiver editando, preencher campos
     if (widget.task != null) {
@@ -32,6 +36,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
       _priority = widget.task!.priority;
       _completed = widget.task!.completed;
       _dueDate = widget.task!.dueDate;
+      _selectedCategoryId = widget.task!.categoryId; // Carregar categoria
     }
   }
 
@@ -40,6 +45,18 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     super.dispose();
+  }
+
+  // Carregar categorias do banco de dados
+  Future<void> _loadCategories() async {
+    try {
+      final categories = await DatabaseService.instance.readAllCategories();
+      setState(() {
+        _categories = categories;
+      });
+    } catch (e) {
+      // Ignorar erro, categorias serão carregadas vazias
+    }
   }
 
   // Método para mostrar o DatePicker
@@ -89,6 +106,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
           priority: _priority,
           completed: _completed,
           dueDate: _dueDate,
+          categoryId: _selectedCategoryId, 
         );
         await DatabaseService.instance.create(newTask);
 
@@ -109,6 +127,7 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
           priority: _priority,
           completed: _completed,
           dueDate: _dueDate,
+          categoryId: _selectedCategoryId, 
         );
         await DatabaseService.instance.update(updatedTask);
 
@@ -198,6 +217,66 @@ class _TaskFormScreenState extends State<TaskFormScreen> {
                       textCapitalization: TextCapitalization.sentences,
                       maxLines: 5,
                       maxLength: 500,
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // Dropdown de Categoria
+                    DropdownButtonFormField<String?>(
+                      initialValue: _selectedCategoryId,
+                      decoration: const InputDecoration(
+                        labelText: 'Categoria',
+                        prefixIcon: Icon(Icons.category),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        // Item para "Sem Categoria"
+                        DropdownMenuItem<String?>(
+                          value: null,
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 16,
+                                height: 16,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              const Text('Sem Categoria'),
+                            ],
+                          ),
+                        ),
+                        // Itens para cada categoria
+                        ..._categories.map((category) {
+                          final color = Color(
+                            int.parse('0xFF${category.color}'),
+                          );
+                          return DropdownMenuItem<String?>(
+                            value: category.id,
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 16,
+                                  height: 16,
+                                  decoration: BoxDecoration(
+                                    color: color,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(category.name),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                      onChanged: (value) {
+                        setState(() {
+                          _selectedCategoryId = value;
+                        });
+                      },
                     ),
 
                     const SizedBox(height: 16),

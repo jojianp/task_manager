@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/task.dart';
+import '../models/category.dart';
 
 class TaskCard extends StatelessWidget {
   final Task task;
+  final List<Category> categories; 
   final VoidCallback onTap;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
@@ -11,6 +13,7 @@ class TaskCard extends StatelessWidget {
   const TaskCard({
     super.key,
     required this.task,
+    required this.categories,
     required this.onTap,
     required this.onToggle,
     required this.onDelete,
@@ -55,6 +58,30 @@ class TaskCard extends StatelessWidget {
     }
   }
 
+  // Método para obter a categoria da tarefa
+  Category? get _taskCategory {
+    if (task.categoryId == null) return null;
+    try {
+      return categories.firstWhere((cat) => cat.id == task.categoryId);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Método para obter a cor da categoria
+  Color _getCategoryColor() {
+    final category = _taskCategory;
+    if (category == null) return Colors.grey;
+    return Color(int.parse('0xFF${category.color}'));
+  }
+
+  // Método para obter o nome da categoria
+  String _getCategoryName() {
+    final category = _taskCategory;
+    if (category == null) return 'Sem Categoria';
+    return category.name;
+  }
+
   bool get _isOverdue {
     if (task.dueDate == null || task.completed) return false;
     return task.dueDate!.isBefore(DateTime.now());
@@ -72,6 +99,7 @@ class TaskCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
     final dueDateFormat = DateFormat('dd/MM/yyyy');
+    final categoryColor = _getCategoryColor();
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -81,7 +109,7 @@ class TaskCard extends StatelessWidget {
         side: BorderSide(
           color: _isOverdue
               ? Colors.red
-              : (task.completed ? Colors.grey.shade300 : _getPriorityColor()),
+              : (task.completed ? Colors.grey.shade300 : categoryColor),
           width: 2,
         ),
       ),
@@ -168,6 +196,40 @@ class TaskCard extends StatelessWidget {
                       spacing: 12,
                       runSpacing: 8,
                       children: [
+                        // Categoria
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: categoryColor.withValues(
+                              alpha: 0.1,
+                            ), // CORRIGIDO
+                            border: Border.all(color: categoryColor, width: 1),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.category,
+                                size: 14,
+                                color: categoryColor,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _getCategoryName(),
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: categoryColor,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
                         // Prioridade
                         Container(
                           padding: const EdgeInsets.symmetric(
@@ -232,10 +294,16 @@ class TaskCard extends StatelessWidget {
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
                               color: _isOverdue
-                                  ? Colors.red.withValues(alpha: 0.1)
+                                  ? Colors.red.withValues(
+                                      alpha: 0.1,
+                                    ) 
                                   : (_isDueToday
-                                        ? Colors.orange.withValues(alpha: 0.1)
-                                        : Colors.blue.withValues(alpha: 0.1)),
+                                        ? Colors.orange.withValues(
+                                            alpha: 0.1,
+                                          ) 
+                                        : Colors.blue.withValues(
+                                            alpha: 0.1,
+                                          )), 
                               border: Border.all(
                                 color: _isOverdue
                                     ? Colors.red

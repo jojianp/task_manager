@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/task.dart';
+import '../models/category.dart';
 import '../services/database_service.dart';
 import '../widgets/task_card.dart';
 import 'task_form_screen.dart';
@@ -13,23 +14,27 @@ class TaskListScreen extends StatefulWidget {
 
 class _TaskListScreenState extends State<TaskListScreen> {
   List<Task> _tasks = [];
-  String _filter = 'all'; // all, completed, pending
-  String _sortBy =
-      'dueDate'; // dueDate, date, priority, title - MUDADO: dueDate como padrão
+  List<Category> _categories = [];
+  String _filter = 'all'; 
+  String _categoryFilter =
+      'all'; 
+  String _sortBy = 'dueDate'; 
   String _searchQuery = '';
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _loadTasks();
+    _loadData();
   }
 
-  Future<void> _loadTasks() async {
+  Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final tasks = await DatabaseService.instance.readAll();
+    final categories = await DatabaseService.instance.readAllCategories();
     setState(() {
       _tasks = tasks;
+      _categories = categories;
       _isLoading = false;
     });
   }
@@ -45,6 +50,15 @@ class _TaskListScreenState extends State<TaskListScreen> {
       case 'pending':
         tasks = tasks.where((t) => !t.completed).toList();
         break;
+    }
+
+    // Filtro por categoria
+    if (_categoryFilter != 'all') {
+      if (_categoryFilter == 'none') {
+        tasks = tasks.where((t) => t.categoryId == null).toList();
+      } else {
+        tasks = tasks.where((t) => t.categoryId == _categoryFilter).toList();
+      }
     }
 
     // Filtro por busca
@@ -89,7 +103,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Future<void> _toggleTask(Task task) async {
     final updated = task.copyWith(completed: !task.completed);
     await DatabaseService.instance.update(updated);
-    await _loadTasks();
+    await _loadData();
   }
 
   Future<void> _deleteTask(Task task) async {
@@ -115,7 +129,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
     if (confirmed == true) {
       await DatabaseService.instance.delete(task.id);
-      await _loadTasks();
+      await _loadData();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -135,7 +149,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
 
     if (result == true) {
-      await _loadTasks();
+      await _loadData();
     }
   }
 
@@ -275,6 +289,84 @@ class _TaskListScreenState extends State<TaskListScreen> {
             ),
           ),
 
+          // Filtro de Categorias
+          if (_categories.isNotEmpty)
+            SizedBox(
+              height: 60,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                children: [
+                  // Botão "Todas"
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilterChip(
+                      label: const Text('Todas'),
+                      selected: _categoryFilter == 'all',
+                      onSelected: (selected) {
+                        setState(() {
+                          _categoryFilter = selected ? 'all' : 'all';
+                        });
+                      },
+                      backgroundColor: Colors.grey.shade200,
+                      selectedColor: Colors.blue,
+                      labelStyle: TextStyle(
+                        color: _categoryFilter == 'all'
+                            ? Colors.white
+                            : Colors.black,
+                      ),
+                    ),
+                  ),
+                  // Botão "Sem Categoria"
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: FilterChip(
+                      label: const Text('Sem Categoria'),
+                      selected: _categoryFilter == 'none',
+                      onSelected: (selected) {
+                        setState(() {
+                          _categoryFilter = selected ? 'none' : 'all';
+                        });
+                      },
+                      backgroundColor: Colors.grey.shade200,
+                      selectedColor: Colors.grey,
+                      labelStyle: TextStyle(
+                        color: _categoryFilter == 'none'
+                            ? Colors.white
+                            : Colors.black,
+                      ),
+                    ),
+                  ),
+                  // Botões para cada categoria
+                  ..._categories.map((category) {
+                    final color = Color(int.parse('0xFF${category.color}'));
+                    final isSelected = _categoryFilter == category.id;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        label: Text(category.name),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          setState(() {
+                            _categoryFilter = selected ? category.id : 'all';
+                          });
+                        },
+                        backgroundColor: color.withValues(alpha: 0.1),
+                        selectedColor: color,
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : color,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                        checkmarkColor: Colors.white,
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+
           // Card de Estatísticas
           if (_tasks.isNotEmpty)
             Container(
@@ -325,7 +417,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 : filteredTasks.isEmpty
                 ? _buildEmptyState()
                 : RefreshIndicator(
-                    onRefresh: _loadTasks,
+                    onRefresh: _loadData,
                     child: ListView.builder(
                       padding: const EdgeInsets.only(bottom: 80),
                       itemCount: filteredTasks.length,
@@ -333,6 +425,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
                         final task = filteredTasks[index];
                         return TaskCard(
                           task: task,
+                          categories:
+                              _categories, // Passar categorias para o TaskCard
                           onTap: () => _openTaskForm(task),
                           onToggle: () => _toggleTask(task),
                           onDelete: () => _deleteTask(task),
