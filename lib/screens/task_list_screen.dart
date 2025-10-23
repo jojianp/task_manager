@@ -14,6 +14,8 @@ class TaskListScreen extends StatefulWidget {
 class _TaskListScreenState extends State<TaskListScreen> {
   List<Task> _tasks = [];
   String _filter = 'all'; // all, completed, pending
+  String _sortBy = 'date'; // date, priority, title
+  String _searchQuery = '';
   bool _isLoading = false;
 
   @override
@@ -32,14 +34,45 @@ class _TaskListScreenState extends State<TaskListScreen> {
   }
 
   List<Task> get _filteredTasks {
+    var tasks = _tasks;
+
+    // Filtro por status
     switch (_filter) {
       case 'completed':
-        return _tasks.where((t) => t.completed).toList();
+        tasks = tasks.where((t) => t.completed).toList();
+        break;
       case 'pending':
-        return _tasks.where((t) => !t.completed).toList();
-      default:
-        return _tasks;
+        tasks = tasks.where((t) => !t.completed).toList();
+        break;
     }
+
+    // Filtro por busca
+    if (_searchQuery.isNotEmpty) {
+      tasks = tasks.where((t) {
+        return t.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+            t.description.toLowerCase().contains(_searchQuery.toLowerCase());
+      }).toList();
+    }
+
+    // Ordenação
+    switch (_sortBy) {
+      case 'priority':
+        final priorityOrder = {'urgent': 0, 'high': 1, 'medium': 2, 'low': 3};
+        tasks.sort((a, b) {
+          final orderA = priorityOrder[a.priority] ?? 2;
+          final orderB = priorityOrder[b.priority] ?? 2;
+          return orderA.compareTo(orderB);
+        });
+        break;
+      case 'title':
+        tasks.sort((a, b) => a.title.compareTo(b.title));
+        break;
+      case 'date':
+      default:
+        tasks.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }
+
+    return tasks;
   }
 
   Future<void> _toggleTask(Task task) async {
@@ -72,7 +105,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     if (confirmed == true) {
       await DatabaseService.instance.delete(task.id);
       await _loadTasks();
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -101,7 +134,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Widget build(BuildContext context) {
     final filteredTasks = _filteredTasks;
     final stats = _calculateStats();
-    
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Minhas Tarefas'),
@@ -109,12 +142,32 @@ class _TaskListScreenState extends State<TaskListScreen> {
         foregroundColor: Colors.white,
         elevation: 2,
         actions: [
-          // Filtro
+          // Menu de ordenação
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.sort),
+            onSelected: (value) => setState(() => _sortBy = value),
+            itemBuilder: (context) => const [
+              PopupMenuItem(
+                value: 'date',
+                child: Text('Ordenar por Data'),
+              ),
+              PopupMenuItem(
+                value: 'priority',
+                child: Text('Ordenar por Prioridade'),
+              ),
+              PopupMenuItem(
+                value: 'title',
+                child: Text('Ordenar por Título'),
+              ),
+            ],
+          ),
+
+          // Menu de filtro
           PopupMenuButton<String>(
             icon: const Icon(Icons.filter_list),
             onSelected: (value) => setState(() => _filter = value),
-            itemBuilder: (context) => [
-              const PopupMenuItem(
+            itemBuilder: (context) => const [
+              PopupMenuItem(
                 value: 'all',
                 child: Row(
                   children: [
@@ -124,7 +177,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'pending',
                 child: Row(
                   children: [
@@ -134,7 +187,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   ],
                 ),
               ),
-              const PopupMenuItem(
+              PopupMenuItem(
                 value: 'completed',
                 child: Row(
                   children: [
@@ -148,9 +201,34 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ),
         ],
       ),
-      
+
       body: Column(
         children: [
+          // Barra de busca
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              decoration: InputDecoration(
+                hintText: 'Buscar tarefas...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              onChanged: (value) {
+                setState(() => _searchQuery = value);
+              },
+            ),
+          ),
+
           // Card de Estatísticas
           if (_tasks.isNotEmpty)
             Container(
@@ -163,36 +241,26 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: [
+                boxShadow: const [
                   BoxShadow(
                     blurRadius: 8,
-                    offset: const Offset(0, 4),
+                    offset: Offset(0, 4),
                   ),
                 ],
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  _buildStatItem(
-                    Icons.list,
-                    'Total',
-                    stats['total'].toString(),
-                  ),
-                  _buildStatItem(
-                    Icons.pending_actions,
-                    'Pendentes',
-                    stats['pending'].toString(),
-                  ),
-                  _buildStatItem(
-                    Icons.check_circle,
-                    'Concluídas',
-                    stats['completed'].toString(),
-                  ),
+                  _buildStatItem(Icons.list, 'Total', stats['total'].toString()),
+                  _buildStatItem(Icons.pending_actions, 'Pendentes',
+                      stats['pending'].toString()),
+                  _buildStatItem(Icons.check_circle, 'Concluídas',
+                      stats['completed'].toString()),
                 ],
               ),
             ),
-          
-          // Lista de Tarefas
+
+          // Lista de tarefas
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -217,7 +285,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
           ),
         ],
       ),
-      
+
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openTaskForm(),
         icon: const Icon(Icons.add),
@@ -256,7 +324,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Widget _buildEmptyState() {
     String message;
     IconData icon;
-    
+
     switch (_filter) {
       case 'completed':
         message = 'Nenhuma tarefa concluída ainda';
@@ -270,7 +338,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
         message = 'Nenhuma tarefa cadastrada';
         icon = Icons.task_alt;
     }
-    
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
