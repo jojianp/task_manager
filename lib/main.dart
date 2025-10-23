@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'screens/task_list_screen.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'screens/task_list_screen.dart';
 
 void main() {
-  // Inicializa o FFI para Windows/Linux/Mac
+  // Inicializa o suporte ao sqflite no Windows, Linux e macOS
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfi;
 
@@ -16,8 +16,28 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Task Manager',
-      theme: ThemeData(primarySwatch: Colors.blue),
+      title: 'Task Manager Pro',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.blue,
+          brightness: Brightness.light,
+        ),
+        useMaterial3: true,
+        cardTheme: CardThemeData(
+          elevation: 2,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(12)),
+          ),
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(8)),
+          ),
+          filled: true,
+          fillColor: Color(0xFFF5F5F5),
+        ),
+      ),
       home: const TaskListScreen(),
     );
   }
